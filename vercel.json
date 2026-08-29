@@ -1,0 +1,7 @@
+{
+  "routes": [
+    { "src": "/home",          "dest": "/home/index.html" },
+    { "src": "/home/",         "dest": "/home/index.html" },
+    { "src": "/oauth/callback","dest": "/oauth/callback.html" }
+  ]
+}
