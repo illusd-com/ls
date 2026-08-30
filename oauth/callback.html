@@ -66,7 +66,6 @@
       font-weight: 700;
       letter-spacing: 6px;
       color: var(--green);
-      user-select: all;
     }
     .copy-btn {
       background: var(--accent);
@@ -81,11 +80,7 @@
     }
     .copy-btn:hover { background: #4f52d9; }
     .copy-btn.copied { background: var(--green); }
-    .hint {
-      font-size: 0.8rem;
-      color: var(--text2);
-      margin-top: 1rem;
-    }
+    .hint { font-size: 0.8rem; color: var(--text2); margin-top: 1rem; }
     .hint code {
       background: var(--bg);
       padding: 0.15rem 0.4rem;
@@ -94,14 +89,21 @@
       color: #06b6d4;
     }
     .error { color: #ef4444; }
-    a.home {
-      display: inline-block;
-      margin-top: 1.5rem;
-      color: var(--text2);
-      font-size: 0.85rem;
-      text-decoration: none;
-    }
+    .user-info { margin-bottom: 1rem; }
+    .user-info img { width: 48px; height: 48px; border-radius: 50%; }
+    .user-info .username { font-size: 1.1rem; font-weight: 600; margin-top: 0.5rem; }
+    a.home { display: inline-block; margin-top: 1.5rem; color: var(--text2); font-size: 0.85rem; text-decoration: none; }
     a.home:hover { color: var(--accent); }
+    .cmd-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      color: var(--cyan);
+    }
   </style>
 </head>
 <body>
@@ -115,7 +117,6 @@
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     const error = params.get('error');
-    const state = params.get('state');
 
     const card = document.getElementById('card');
     const spinner = document.getElementById('spinner');
@@ -127,49 +128,74 @@
       title.textContent = '授權失敗';
       title.className = 'error';
       subtitle.textContent = params.get('error_description') || error;
-    } else if (code) {
-      // GitHub 授權成功，顯示 code
-      setTimeout(() => {
-        spinner.style.display = 'none';
-        title.textContent = '授權成功！';
-        subtitle.textContent = '請複製下方授權碼，回到終端機完成登入';
-
-        card.innerHTML = `
-          <div style="font-size:2rem;margin-bottom:0.5rem">✅</div>
-          <h2>授權成功！</h2>
-          <p>請複製下方授權碼，回到終端機完成登入</p>
-          <div class="code-box">
-            <div class="code-label">你的授權碼</div>
-            <div class="code-value" id="code">${code}</div>
-          </div>
-          <button class="copy-btn" id="copyBtn" onclick="copyCode()">📋 複製授權碼</button>
-          <div class="hint">
-            回到終端機執行：<br/>
-            <code>ls login ${code}</code>
-          </div>
-          <a class="home" href="https://ls.illusd.com">← 回到 LessLS 官網</a>
-        `;
-      }, 800);
-    } else {
-      spinner.style.display = 'none';
-      title.textContent = '找不到授權碼';
-      subtitle.textContent = '請確認你已透過 GitHub 完成授權';
+      return;
     }
 
+    if (!code) {
+      spinner.style.display = 'none';
+      title.textContent = '找不到授權碼';
+      subtitle.textContent = '請確認你已透過 GitHub 完成授權，或重新執行 lss login';
+      return;
+    }
+
+    // 先用 GitHub API 換取 user info（不需要 access token，只需要 code 換取）
+    fetch(`https://api.github.com/user?access_token=${code}`)
+      .then(r => r.json())
+      .then(user => {
+        // 存到 localStorage 讓 CLI 能讀取
+        localStorage.setItem('lessls_oauth_user', JSON.stringify(user));
+        localStorage.setItem('lessls_oauth_code', code);
+
+        setTimeout(() => {
+          spinner.style.display = 'none';
+          card.innerHTML = `
+            <div style="font-size:2rem;margin-bottom:0.5rem">✅</div>
+            <h2>授權成功！</h2>
+            <div class="user-info">
+              <img src="${user.avatar_url || ''}" alt="${user.login}" />
+              <div class="username">${user.login}</div>
+            </div>
+            <p>請複製下方指令完成登入</p>
+            <div class="cmd-box">lss login ${code}</div>
+            <button class="copy-btn" onclick="copyCmd()">📋 複製指令</button>
+            <a class="home" href="https://ls.illusd.com/home">← 回到 LessLS 官網</a>
+          `;
+        }, 600);
+      })
+      .catch(() => {
+        // GitHub API 失敗時，顯示 code 讓使用者手動輸入
+        setTimeout(() => {
+          spinner.style.display = 'none';
+          card.innerHTML = `
+            <div style="font-size:2rem;margin-bottom:0.5rem">📋</div>
+            <h2>授權成功！</h2>
+            <p>請複製下方授權碼，回到終端機完成登入</p>
+            <div class="code-box">
+              <div class="code-label">授權碼</div>
+              <div class="code-value">${code}</div>
+            </div>
+            <button class="copy-btn" onclick="copyCode()">📋 複製授權碼</button>
+            <div class="hint">
+              回到終端機執行：<br/>
+              <code>lss login ${code}</code>
+            </div>
+            <a class="home" href="https://ls.illusd.com/home">← 回到 LessLS 官網</a>
+          `;
+        }, 600);
+      });
+
     function copyCode() {
-      const codeEl = document.getElementById('code');
-      const btn = document.getElementById('copyBtn');
-      navigator.clipboard.writeText(codeEl.textContent.trim())
-        .then(() => {
-          btn.textContent = '✅ 已複製';
-          btn.classList.add('copied');
-        })
-        .catch(() => {
-          codeEl.select();
-          document.execCommand('copy');
-          btn.textContent = '✅ 已複製';
-          btn.classList.add('copied');
-        });
+      navigator.clipboard.writeText(code).catch(() => {});
+      const btn = document.querySelector('.copy-btn');
+      btn.textContent = '✅ 已複製';
+      btn.classList.add('copied');
+    }
+
+    function copyCmd() {
+      navigator.clipboard.writeText(`lss login ${code}`).catch(() => {});
+      const btn = document.querySelector('.copy-btn');
+      btn.textContent = '✅ 已複製';
+      btn.classList.add('copied');
     }
   </script>
 </body>
