@@ -138,58 +138,26 @@
       return;
     }
 
-    // 先用 GitHub API 換取 user info（不需要 access token，只需要 code 換取）
-    fetch(`https://api.github.com/user?access_token=${code}`)
-      .then(r => r.json())
-      .then(user => {
-        // 存到 localStorage 讓 CLI 能讀取
-        localStorage.setItem('lessls_oauth_user', JSON.stringify(user));
-        localStorage.setItem('lessls_oauth_code', code);
-
-        setTimeout(() => {
-          spinner.style.display = 'none';
-          card.innerHTML = `
-            <div style="font-size:2rem;margin-bottom:0.5rem">✅</div>
-            <h2>授權成功！</h2>
-            <div class="user-info">
-              <img src="${user.avatar_url || ''}" alt="${user.login}" />
-              <div class="username">${user.login}</div>
-            </div>
-            <p>請複製下方指令完成登入</p>
-            <div class="cmd-box">lss login ${code}</div>
-            <button class="copy-btn" onclick="copyCmd()">📋 複製指令</button>
-            <a class="home" href="https://ls.illusd.com/home">← 回到 LessLS 官網</a>
-          `;
-        }, 600);
-      })
-      .catch(() => {
-        // GitHub API 失敗時，顯示 code 讓使用者手動輸入
-        setTimeout(() => {
-          spinner.style.display = 'none';
-          card.innerHTML = `
-            <div style="font-size:2rem;margin-bottom:0.5rem">📋</div>
-            <h2>授權成功！</h2>
-            <p>請複製下方授權碼，回到終端機完成登入</p>
-            <div class="code-box">
-              <div class="code-label">授權碼</div>
-              <div class="code-value">${code}</div>
-            </div>
-            <button class="copy-btn" onclick="copyCode()">📋 複製授權碼</button>
-            <div class="hint">
-              回到終端機執行：<br/>
-              <code>lss login ${code}</code>
-            </div>
-            <a class="home" href="https://ls.illusd.com/home">← 回到 LessLS 官網</a>
-          `;
-        }, 600);
-      });
-
-    function copyCode() {
-      navigator.clipboard.writeText(code).catch(() => {});
-      const btn = document.querySelector('.copy-btn');
-      btn.textContent = '✅ 已複製';
-      btn.classList.add('copied');
-    }
+    // 直接顯示 code 讓使用者複製貼回終端機
+    // （靜態頁面無法換 token，需 CLI 後端處理）
+    setTimeout(() => {
+      spinner.style.display = 'none';
+      card.innerHTML = `
+        <div style="font-size:2rem;margin-bottom:0.5rem">✅</div>
+        <h2>GitHub 授權成功！</h2>
+        <p>請複製下方指令，回到終端機完成登入</p>
+        <div class="code-box">
+          <div class="code-label">授權碼</div>
+          <div class="code-value">${code}</div>
+        </div>
+        <div class="cmd-box">lss login ${code}</div>
+        <button class="copy-btn" onclick="copyCmd()">📋 複製指令</button>
+        <div class="hint">
+          回到終端機執行上列指令即可完成登入
+        </div>
+        <a class="home" href="https://ls.illusd.com/home">← 回到 LessLS 官網</a>
+      `;
+    }, 600);
 
     function copyCmd() {
       navigator.clipboard.writeText(`lss login ${code}`).catch(() => {});
