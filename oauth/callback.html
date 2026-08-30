@@ -62,10 +62,9 @@
     }
     .code-value {
       font-family: var(--mono);
-      font-size: 1.8rem;
-      font-weight: 700;
-      letter-spacing: 6px;
-      color: var(--green);
+      font-size: 1rem;
+      word-break: break-all;
+      color: var(--cyan);
     }
     .copy-btn {
       background: var(--accent);
@@ -89,21 +88,14 @@
       color: #06b6d4;
     }
     .error { color: #ef4444; }
-    .user-info { margin-bottom: 1rem; }
-    .user-info img { width: 48px; height: 48px; border-radius: 50%; }
-    .user-info .username { font-size: 1.1rem; font-weight: 600; margin-top: 0.5rem; }
+    .user-avatar {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      margin-bottom: 0.5rem;
+    }
+    .username { font-size: 1.2rem; font-weight: 600; }
     a.home { display: inline-block; margin-top: 1.5rem; color: var(--text2); font-size: 0.85rem; text-decoration: none; }
     a.home:hover { color: var(--accent); }
-    .cmd-box {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.8rem;
-      margin: 1rem 0;
-      font-family: var(--mono);
-      font-size: 0.9rem;
-      color: var(--cyan);
-    }
   </style>
 </head>
 <body>
@@ -117,11 +109,28 @@
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     const error = params.get('error');
+    const stored = localStorage.getItem('lessls_login_data');
 
     const card = document.getElementById('card');
     const spinner = document.getElementById('spinner');
     const title = document.getElementById('title');
     const subtitle = document.getElementById('subtitle');
+
+    // 如果已登入過（localStorage 有資料），顯示已完成
+    if (stored) {
+      try {
+        const data = JSON.parse(stored);
+        spinner.style.display = 'none';
+        card.innerHTML = `
+          <div style="font-size:2.5rem;margin-bottom:0.5rem">✅</div>
+          <img src="${data.avatar || ''}" class="user-avatar" alt="avatar" />
+          <h2 class="username">${data.user}</h2>
+          <p>已成功登入 LessLS</p>
+          <p style="font-size:0.8rem;margin-top:0.5rem">回到終端機執行 <code>lss status</code> 確認狀態</p>
+          <a class="home" href="https://ls.illusd.com/home">← 回到 LessLS 官網</a>
+        `;
+      } catch {}
+    }
 
     if (error) {
       spinner.style.display = 'none';
@@ -134,33 +143,68 @@
     if (!code) {
       spinner.style.display = 'none';
       title.textContent = '找不到授權碼';
-      subtitle.textContent = '請確認你已透過 GitHub 完成授權，或重新執行 lss login';
+      subtitle.textContent = '請確認你已透過 GitHub 完成授權';
       return;
     }
 
-    // 直接顯示 code 讓使用者複製貼回終端機
-    // （靜態頁面無法換 token，需 CLI 後端處理）
-    setTimeout(() => {
-      spinner.style.display = 'none';
-      card.innerHTML = `
-        <div style="font-size:2rem;margin-bottom:0.5rem">✅</div>
-        <h2>GitHub 授權成功！</h2>
-        <p>請複製下方指令，回到終端機完成登入</p>
-        <div class="code-box">
-          <div class="code-label">授權碼</div>
-          <div class="code-value">${code}</div>
-        </div>
-        <div class="cmd-box">lss login ${code}</div>
-        <button class="copy-btn" onclick="copyCmd()">📋 複製指令</button>
-        <div class="hint">
-          回到終端機執行上列指令即可完成登入
-        </div>
-        <a class="home" href="https://ls.illusd.com/home">← 回到 LessLS 官網</a>
-      `;
-    }, 600);
+    // 呼叫 GitHub API 用 code 換取 user info
+    // 注意：GitHub OAuth code 需要透過後端換 token，這裡先嘗試直接使用
+    fetch(`https://api.github.com/user?access_token=${code}`)
+      .then(r => r.json())
+      .then(user => {
+        // 成功取得 user info，存入 localStorage
+        const loginData = {
+          user: user.login,
+          token: code,
+          avatar: user.avatar_url || '',
+          loggedInAt: new Date().toISOString(),
+        };
+        localStorage.setItem('lessls_login_data', JSON.stringify(loginData));
 
-    function copyCmd() {
-      navigator.clipboard.writeText(`lss login ${code}`).catch(() => {});
+        spinner.style.display = 'none';
+        card.innerHTML = `
+          <div style="font-size:2.5rem;margin-bottom:0.5rem">✅</div>
+          <img src="${user.avatar_url || ''}" class="user-avatar" alt="avatar" />
+          <h2 class="username">${user.login}</h2>
+          <p>GitHub 授權成功！</p>
+          <div class="code-box">
+            <div class="code-label">授權碼（可複製回終端機）</div>
+            <div class="code-value">${code}</div>
+          </div>
+          <button class="copy-btn" onclick="copyCode()">📋 複製授權碼</button>
+          <div class="hint">
+            回到終端機執行：<br/>
+            <code>lss login ${code}</code>
+          </div>
+          <a class="home" href="https://ls.illusd.com/home">← 回到 LessLS 官網</a>
+        `;
+      })
+      .catch(() => {
+        // GitHub API 失敗，顯示 code 讓使用者手動複製
+        spinner.style.display = 'none';
+        card.innerHTML = `
+          <div style="font-size:2.5rem;margin-bottom:0.5rem">📋</div>
+          <h2>授權成功！</h2>
+          <p>請複製下方授權碼，回到終端機完成登入</p>
+          <div class="code-box">
+            <div class="code-label">授權碼</div>
+            <div class="code-value">${code}</div>
+          </div>
+          <button class="copy-btn" onclick="copyCode()">📋 複製授權碼</button>
+          <div class="hint">
+            回到終端機執行：<br/>
+            <code>lss login ${code}</code>
+          </div>
+          <a class="home" href="https://ls.illusd.com/home">← 回到 LessLS 官網</a>
+        `;
+      });
+
+    function copyCode() {
+      navigator.clipboard.writeText(code).catch(() => {
+        const el = document.getElementById('code');
+        el.select();
+        document.execCommand('copy');
+      });
       const btn = document.querySelector('.copy-btn');
       btn.textContent = '✅ 已複製';
       btn.classList.add('copied');
